@@ -1,0 +1,25 @@
+resolver: lts-14.13
+packages:
+- .
+
+nix:
+  enable: true
+  packages:
+    - libGL
+    - mesa_glu
+    - xorg.libX11
+    - xorg.libXrandr
+    - xorg.libXi
+    - xorg.libXxf86vm
+    - xorg.libXcursor
+    - xorg.libXinerama
+    - zlib
+
+# Override default flag values for local packages and extra-deps
+# flags: {}
+
+# Extra package databases containing global packages
+# extra-package-dbs: []
+
+# Control whether we use the GHC we find on the path
+# system-ghc: true

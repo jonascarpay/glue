@@ -1,0 +1,54 @@
+name:                glue
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/githubuser/glue#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2019 Author name here
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+extra-source-files:  README.md
+
+library
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  exposed-modules:
+    NonGL
+    Lib
+    Window
+    GLStorable
+    Types
+  build-depends:
+      base >= 4.7 && < 5
+    , mtl
+    , containers
+    , linear
+    , parsec
+    , gl
+    , GLFW-b
+    , JuicyPixels
+    , vector
+    , lens
+
+executable glue
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends:
+      base >= 4.7 && < 5
+    , glue
+    , gl
+    , GLFW-b
+    , mtl
+    , containers
+    , linear
+    , parsec
+    , JuicyPixels
+    , lens
+    , vector
+  ghc-options:
+    -Wall
