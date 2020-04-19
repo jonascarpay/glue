@@ -28,6 +28,7 @@ library
     , containers
     , linear
     , parsec
+    , storable-tuple
     , gl
     , GLFW-b
     , JuicyPixels
@@ -45,6 +46,7 @@ executable glue
     , GLFW-b
     , mtl
     , containers
+    , storable-tuple
     , linear
     , parsec
     , JuicyPixels

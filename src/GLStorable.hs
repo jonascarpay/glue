@@ -1,64 +1,72 @@
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE TypeOperators #-}
 
 module GLStorable where
 
 import Control.Monad.IO.Class
-import Foreign                as F
-
+import Foreign as F
+import Foreign.Storable.Tuple ()
 import Graphics.GL.Core33 as GL
-import Graphics.GL.Types  as GL
-
+import Graphics.GL.Types as GL
 import Linear
-
 import Types
 
 class GLUniform a where
   setUniform :: MonadIO m => Uniform a -> a -> m ()
 
 instance GLUniform (M44 Float) where
-  setUniform (Uniform ptr) val =
-    liftIO $ with val $ glUniformMatrix4fv ptr 1 GL_TRUE . castPtr
+  setUniform (Uniform ptr) x =
+    liftIO $ F.with x $ glUniformMatrix4fv ptr 1 GL_TRUE . castPtr
+
+instance GLUniform (V3 Float) where
+  setUniform (Uniform ptr) (V3 a b c) = glUniform3f ptr a b c
 
 instance GLUniform GLint where setUniform (Uniform ptr) = glUniform1i ptr
 
-data a :. as where
-  (:.) :: a -> as -> (a :. as)
+data VertexAttribs
+  = VertexAttribs
+      { attrSize :: GLint,
+        attrType :: GLenum,
+        attrNormalize :: GLboolean
+      }
 
-infixr 5 :.
+class Storable a => GLVertex a where vertexAttribs :: p a -> [VertexAttribs]
 
-instance (Storable a, Storable as) => Storable (a :. as) where
-  {-# INLINE sizeOf #-}
-  sizeOf    _ = sizeOf    (undefined :: a)   +   sizeOf    (undefined :: as)
-  {-# INLINE alignment #-}
-  alignment _ = alignment (undefined :: a) `lcm` alignment (undefined :: as)
-  {-# INLINE peek #-}
-  peek ptr = do
-    let ptr' = alignPtr ptr (alignment (undefined :: a))
-    a  <- peek (castPtr ptr')
-    as <- peek . castPtr $ plusPtr ptr' (sizeOf (undefined :: a))
-    pure $ a :. as
-  {-# INLINE poke #-}
-  poke ptr (a :. as) = do
-    poke (castPtr ptr) a
-    poke (castPtr $ plusPtr ptr (sizeOf a)) as
+instance GLVertex Float where vertexAttribs _ = [VertexAttribs 1 GL_FLOAT GL_FALSE]
 
-class Storable a => GLAttrib a where
-  attribs :: a -> [(GLint, Word32, GLboolean)]
+instance GLVertex (V1 Float) where vertexAttribs _ = [VertexAttribs 1 GL_FLOAT GL_FALSE]
 
-instance GLAttrib Float      where attribs _ = [(1, GL_FLOAT, GL_FALSE)]
-instance GLAttrib (V1 Float) where attribs _ = [(1, GL_FLOAT, GL_FALSE)]
-instance GLAttrib (V2 Float) where attribs _ = [(2, GL_FLOAT, GL_FALSE)]
-instance GLAttrib (V3 Float) where attribs _ = [(3, GL_FLOAT, GL_FALSE)]
-instance GLAttrib (V4 Float) where attribs _ = [(4, GL_FLOAT, GL_FALSE)]
+instance GLVertex (V2 Float) where vertexAttribs _ = [VertexAttribs 2 GL_FLOAT GL_FALSE]
 
-instance GLAttrib Word32      where attribs _ = [(1, GL_INT, GL_FALSE)]
-instance GLAttrib (V1 Word32) where attribs _ = [(1, GL_INT, GL_FALSE)]
-instance GLAttrib (V2 Word32) where attribs _ = [(2, GL_INT, GL_FALSE)]
-instance GLAttrib (V3 Word32) where attribs _ = [(3, GL_INT, GL_FALSE)]
-instance GLAttrib (V4 Word32) where attribs _ = [(4, GL_INT, GL_FALSE)]
+instance GLVertex (V3 Float) where vertexAttribs _ = [VertexAttribs 3 GL_FLOAT GL_FALSE]
 
-instance (GLAttrib a, GLAttrib b) => GLAttrib (a :. b) where attribs _ = attribs (undefined :: a) <> attribs (undefined :: b)
+instance GLVertex (V4 Float) where vertexAttribs _ = [VertexAttribs 4 GL_FLOAT GL_FALSE]
+
+instance GLVertex Word32 where vertexAttribs _ = [VertexAttribs 1 GL_INT GL_FALSE]
+
+instance GLVertex (V1 Word32) where vertexAttribs _ = [VertexAttribs 1 GL_INT GL_FALSE]
+
+instance GLVertex (V2 Word32) where vertexAttribs _ = [VertexAttribs 1 GL_INT GL_FALSE]
+
+instance GLVertex (V3 Word32) where vertexAttribs _ = [VertexAttribs 1 GL_INT GL_FALSE]
+
+instance GLVertex (V4 Word32) where vertexAttribs _ = [VertexAttribs 1 GL_INT GL_FALSE]
+
+instance (GLVertex a, GLVertex b) => GLVertex (a, b) where
+  vertexAttribs _ = vertexAttribs (undefined :: p a) <> vertexAttribs (undefined :: p b)
+
+instance (GLVertex a, GLVertex b, GLVertex c) => GLVertex (a, b, c) where
+  vertexAttribs _ =
+    vertexAttribs (undefined :: p a)
+      <> vertexAttribs (undefined :: p b)
+      <> vertexAttribs (undefined :: p c)
+
+instance (GLVertex a, GLVertex b, GLVertex c, GLVertex d) => GLVertex (a, b, c, d) where
+  vertexAttribs _ =
+    vertexAttribs (undefined :: p a)
+      <> vertexAttribs (undefined :: p b)
+      <> vertexAttribs (undefined :: p c)
+      <> vertexAttribs (undefined :: p d)
