@@ -82,7 +82,7 @@ bufferSwapLoop act = do
     getTime' = liftIO $ realToFrac . fromJust <$> getTime
     go tPrev = do
       win <- askWindow
-      glShouldClose <- liftIO $ GLFW.windowShouldClose win
+      glShouldClose <- liftIO $ GLFW.windowShouldClose win -- FIXME this is outside the loop
       unless glShouldClose $ do
         liftIO $ GLFW.swapBuffers win
         liftIO GLFW.pollEvents

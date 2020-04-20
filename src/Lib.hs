@@ -31,6 +31,8 @@ data ShaderError
   | ShaderCompilationError FilePath
   | ProgramLinkError
   | UniformNotFound String
+  | MissingFileError String
+  | OtherError String
 
 showShaderError :: ShaderError -> String
 showShaderError ShaderObjectError = "Error while creating shader object"
@@ -39,6 +41,8 @@ showShaderError (ShaderCompilationError path) =
 showShaderError ProgramLinkError =
   "Error while linking"
 showShaderError (UniformNotFound name) = "Uniform not found: " <> name
+showShaderError (MissingFileError path) = "File not found: " <> path
+showShaderError (OtherError err) = err
 
 -- TODO -- infer shaderType from file extension
 createShader :: MonadIO m => FilePath -> GLenum -> ExceptT ShaderError (WriterT String m) GLenum
@@ -93,6 +97,9 @@ getUniform (Program program) name = do
     -1 -> throwError $ UniformNotFound name
     n -> pure $ Uniform n
 
+setUniformByName :: (MonadIO m, GLUniform a) => Program -> String -> a -> ExceptT ShaderError m ()
+setUniformByName prog name x = getUniform prog name >>= flip setUniform x
+
 -- TODO waarom bestaat dit niet?
 withArraySize :: forall e a. F.Storable e => [e] -> (GLsizeiptr -> F.Ptr e -> IO a) -> IO a
 withArraySize arr f = F.withArrayLen arr $
@@ -114,19 +121,13 @@ genBuffer = liftIO $ alloca $ \buf' -> do
   glGenBuffers 1 buf'
   Buffer <$> peek buf'
 
+-- Also binds buffer
 bufferData :: (Storable e, MonadWindow m) => Buffer -> [e] -> GLenum -> GLenum -> m ()
 bufferData (Buffer buffer) bufferdata buffertype drawtype = liftIO
   $ withArraySize bufferdata
   $ \len arr -> do
     glBindBuffer buffertype buffer
     glBufferData buffertype len (castPtr arr) drawtype
-
--- setUniformName :: (MonadIO m, GLUniform a) => Program -> String -> a -> m (Maybe (Uniform a))
--- setUniformName prog name val = do
---   ename <- getUniform name prog
---   case ename of
---     Right uni -> setUniform uni val >> pure (Just uni)
---     Left _ -> pure Nothing
 
 -- Assumes all things are size 4.
 -- Is that OK?
@@ -141,31 +142,41 @@ setVertexAttribs _ = liftIO $ go attribList 0 0
       glEnableVertexAttribArray n
       go as (n + 1) (off + size * 4)
 
-newtype TextureError
-  = ImgLoadError String
-
-loadTexture2D :: MonadIO m => FilePath -> Bool -> Bool -> m (Either TextureError Texture)
-loadTexture2D path flipX flipY = liftIO $ do
-  tex <- alloca $ \tex' -> do
+-- Warning; Doesn't just allocate a texture and load data into it;
+-- uploading to GPU also necessarily binds texture to active texture unit
+loadTextureRGB2D ::
+  MonadIO m =>
+  FilePath ->
+  Bool ->
+  Bool ->
+  ExceptT ShaderError m Texture
+loadTextureRGB2D path flipX flipY = do
+  img <- withExceptT MissingFileError . ExceptT . liftIO $ readImage path
+  let (Image imgW imgH imgData) = flipImg flipX flipY . convertRGB8 $ img
+  tex <- liftIO $ alloca $ \tex' -> do
     glGenTextures 1 tex'
     peek tex'
   glBindTexture GL_TEXTURE_2D tex
-  mImg <- fmap (flipImg flipX flipY . convertRGB8) <$> readImage path
-  case mImg of
-    Left err -> pure . Left $ ImgLoadError err
-    Right (Image imgW imgH imgData) -> do
-      unsafeWith imgData $ \imgPtr ->
-        glTexImage2D
-          GL_TEXTURE_2D
-          0
-          GL_RGB
-          (fromIntegral imgW)
-          (fromIntegral imgH)
-          0
-          GL_RGB
-          GL_UNSIGNED_BYTE
-          (castPtr imgPtr)
-      pure $ Right $ Texture tex
+  liftIO $ unsafeWith imgData $ \imgPtr ->
+    glTexImage2D
+      GL_TEXTURE_2D
+      0
+      GL_RGB
+      (fromIntegral imgW)
+      (fromIntegral imgH)
+      0
+      GL_RGB
+      GL_UNSIGNED_BYTE
+      (castPtr imgPtr)
+  glGenerateMipmap GL_TEXTURE_2D
+  mapM_
+    (uncurry $ glTexParameteri GL_TEXTURE_2D)
+    [ (GL_TEXTURE_WRAP_S, GL_REPEAT),
+      (GL_TEXTURE_WRAP_T, GL_REPEAT),
+      (GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR),
+      (GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    ]
+  pure $ Texture tex
 
 getTime :: MonadWindow m => m Float
 getTime = liftIO $ realToFrac . fromJust <$> GLFW.getTime

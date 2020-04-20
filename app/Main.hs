@@ -30,17 +30,10 @@ data AppEnv
       { cubeVAO :: VAO,
         cubeView :: Uniform (M44 Float),
         cubeModel :: Uniform (M44 Float),
-        cubeProj :: Uniform (M44 Float),
-        cubeLightCol :: Uniform (V3 Float),
-        cubeLightPos :: Uniform (V3 Float),
         cubeViewPos :: Uniform (V3 Float),
-        cubeSelfCol :: Uniform (V3 Float),
         cubeProg :: Program,
         lightVAO :: VAO,
         lightView :: Uniform (M44 Float),
-        lightModel :: Uniform (M44 Float),
-        lightProj :: Uniform (M44 Float),
-        lightCol :: Uniform (V3 Float),
         lightProg :: Program
       }
 
@@ -54,50 +47,56 @@ data AppState
 
 makeLenses ''AppState
 
-verticesNormals :: [(V3 Float, V3 Float)]
+verticesNormals :: [(V3 Float, V3 Float, V2 Float)]
 verticesNormals =
-  [ (V3 (-0.5) (-0.5) (-0.5), V3 0 0 (-1)),
-    (V3 (0.5) (-0.5) (-0.5), V3 0 0 (-1)),
-    (V3 (0.5) (0.5) (-0.5), V3 0 0 (-1)),
-    (V3 (0.5) (0.5) (-0.5), V3 0 0 (-1)),
-    (V3 (-0.5) (0.5) (-0.5), V3 0 0 (-1)),
-    (V3 (-0.5) (-0.5) (-0.5), V3 0 0 (-1)),
+  [ (V3 (-0.5) (-0.5) (-0.5), V3 0 0 (-1), V2 0 0),
+    (V3 (0.5) (-0.5) (-0.5), V3 0 0 (-1), V2 1 0),
+    (V3 (0.5) (0.5) (-0.5), V3 0 0 (-1), V2 1 1),
+    (V3 (0.5) (0.5) (-0.5), V3 0 0 (-1), V2 1 1),
+    (V3 (-0.5) (0.5) (-0.5), V3 0 0 (-1), V2 0 1),
+    (V3 (-0.5) (-0.5) (-0.5), V3 0 0 (-1), V2 0 0),
     --
-    (V3 (-0.5) (-0.5) (0.5), V3 0 0 1),
-    (V3 (0.5) (-0.5) (0.5), V3 0 0 1),
-    (V3 (0.5) (0.5) (0.5), V3 0 0 1),
-    (V3 (0.5) (0.5) (0.5), V3 0 0 1),
-    (V3 (-0.5) (0.5) (0.5), V3 0 0 1),
-    (V3 (-0.5) (-0.5) (0.5), V3 0 0 1),
+    (V3 (-0.5) (-0.5) (0.5), V3 0 0 1, V2 0 0),
+    (V3 (0.5) (-0.5) (0.5), V3 0 0 1, V2 1 0),
+    (V3 (0.5) (0.5) (0.5), V3 0 0 1, V2 1 1),
+    (V3 (0.5) (0.5) (0.5), V3 0 0 1, V2 1 1),
+    (V3 (-0.5) (0.5) (0.5), V3 0 0 1, V2 0 1),
+    (V3 (-0.5) (-0.5) (0.5), V3 0 0 1, V2 0 0),
     --
-    (V3 (-0.5) (0.5) (0.5), V3 (-1) 0 0),
-    (V3 (-0.5) (0.5) (-0.5), V3 (-1) 0 0),
-    (V3 (-0.5) (-0.5) (-0.5), V3 (-1) 0 0),
-    (V3 (-0.5) (-0.5) (-0.5), V3 (-1) 0 0),
-    (V3 (-0.5) (-0.5) (0.5), V3 (-1) 0 0),
-    (V3 (-0.5) (0.5) (0.5), V3 (-1) 0 0),
+    (V3 (-0.5) (0.5) (0.5), V3 (-1) 0 0, V2 1 0),
+    (V3 (-0.5) (0.5) (-0.5), V3 (-1) 0 0, V2 1 1),
+    (V3 (-0.5) (-0.5) (-0.5), V3 (-1) 0 0, V2 0 1),
+    (V3 (-0.5) (-0.5) (-0.5), V3 (-1) 0 0, V2 0 1),
+    (V3 (-0.5) (-0.5) (0.5), V3 (-1) 0 0, V2 0 0),
+    (V3 (-0.5) (0.5) (0.5), V3 (-1) 0 0, V2 1 0),
     --
-    (V3 (0.5) (0.5) (0.5), V3 1 0 0),
-    (V3 (0.5) (0.5) (-0.5), V3 1 0 0),
-    (V3 (0.5) (-0.5) (-0.5), V3 1 0 0),
-    (V3 (0.5) (-0.5) (-0.5), V3 1 0 0),
-    (V3 (0.5) (-0.5) (0.5), V3 1 0 0),
-    (V3 (0.5) (0.5) (0.5), V3 1 0 0),
+    (V3 (0.5) (0.5) (0.5), V3 1 0 0, V2 1 0),
+    (V3 (0.5) (0.5) (-0.5), V3 1 0 0, V2 1 1),
+    (V3 (0.5) (-0.5) (-0.5), V3 1 0 0, V2 0 1),
+    (V3 (0.5) (-0.5) (-0.5), V3 1 0 0, V2 0 1),
+    (V3 (0.5) (-0.5) (0.5), V3 1 0 0, V2 0 0),
+    (V3 (0.5) (0.5) (0.5), V3 1 0 0, V2 1 0),
     --
-    (V3 (-0.5) (-0.5) (-0.5), V3 0 (-1) 0),
-    (V3 (0.5) (-0.5) (-0.5), V3 0 (-1) 0),
-    (V3 (0.5) (-0.5) (0.5), V3 0 (-1) 0),
-    (V3 (0.5) (-0.5) (0.5), V3 0 (-1) 0),
-    (V3 (-0.5) (-0.5) (0.5), V3 0 (-1) 0),
-    (V3 (-0.5) (-0.5) (-0.5), V3 0 (-1) 0),
+    (V3 (-0.5) (-0.5) (-0.5), V3 0 (-1) 0, V2 0 1),
+    (V3 (0.5) (-0.5) (-0.5), V3 0 (-1) 0, V2 1 1),
+    (V3 (0.5) (-0.5) (0.5), V3 0 (-1) 0, V2 1 0),
+    (V3 (0.5) (-0.5) (0.5), V3 0 (-1) 0, V2 1 0),
+    (V3 (-0.5) (-0.5) (0.5), V3 0 (-1) 0, V2 0 0),
+    (V3 (-0.5) (-0.5) (-0.5), V3 0 (-1) 0, V2 0 1),
     --
-    (V3 (-0.5) (0.5) (-0.5), V3 0 1 0),
-    (V3 (0.5) (0.5) (-0.5), V3 0 1 0),
-    (V3 (0.5) (0.5) (0.5), V3 0 1 0),
-    (V3 (0.5) (0.5) (0.5), V3 0 1 0),
-    (V3 (-0.5) (0.5) (0.5), V3 0 1 0),
-    (V3 (-0.5) (0.5) (-0.5), V3 0 1 0)
+    (V3 (-0.5) (0.5) (-0.5), V3 0 1 0, V2 0 1),
+    (V3 (0.5) (0.5) (-0.5), V3 0 1 0, V2 1 1),
+    (V3 (0.5) (0.5) (0.5), V3 0 1 0, V2 1 0),
+    (V3 (0.5) (0.5) (0.5), V3 0 1 0, V2 1 0),
+    (V3 (-0.5) (0.5) (0.5), V3 0 1 0, V2 0 0),
+    (V3 (-0.5) (0.5) (-0.5), V3 0 1 0, V2 0 1)
   ]
+
+lightPos :: V3 Float
+lightPos = V3 1.2 1 2
+
+lightModel :: M44 Float
+lightModel = identity & translation .~ lightPos & _m33 %~ (* 0.2)
 
 projectionM :: M44 Float
 projectionM = perspective (45 / 180 * pi) (640 / 480) 0.1 100
@@ -119,6 +118,15 @@ main = withWindow defaultHints $ do
   where
     buildEnvironment :: ExceptT ShaderError (WriterT String (WindowT IO)) AppEnv
     buildEnvironment = do
+      do
+        -- No need to pass these to the program, textures stay bound
+        glActiveTexture GL_TEXTURE0
+        loadTextureRGB2D "assets/container_diffuse.png" False False
+        glActiveTexture GL_TEXTURE1
+        loadTextureRGB2D "assets/container_specular.png" False False
+      --
+      glEnable GL_DEPTH_TEST
+      --
       cubeVAO <- genArray
       bindArray cubeVAO
       vbo <- genBuffer
@@ -126,13 +134,12 @@ main = withWindow defaultHints $ do
       setVertexAttribs verticesNormals
       unbindArray
       --
-      glEnable GL_DEPTH_TEST
-      --
       lightVAO <- genArray
       bindArray lightVAO
       glBindBuffer GL_ARRAY_BUFFER (unBuffer vbo)
       setVertexAttribs verticesNormals
       unbindArray
+      --
       cubeProg <-
         createShaderProgram
           [ ("glsl/common.vert", GL_VERTEX_SHADER),
@@ -143,26 +150,32 @@ main = withWindow defaultHints $ do
           [ ("glsl/common.vert", GL_VERTEX_SHADER),
             ("glsl/light.frag", GL_FRAGMENT_SHADER)
           ]
-      cubeView <- getUniform cubeProg "view"
+      do
+        useProgram lightProg
+        setUniformByName lightProg "lightColor" (1 :: V3 Float)
+        setUniformByName lightProg "model" lightModel
+        setUniformByName lightProg "projection" projectionM
+      do
+        useProgram cubeProg -- Can only set after binding
+        setUniformByName cubeProg "material.shininess" (32 :: Float)
+        setUniformByName cubeProg "material.diffuse" (0 :: TextureUnit)
+        setUniformByName cubeProg "material.specular" (1 :: TextureUnit)
+        setUniformByName cubeProg "projection" projectionM
+        setUniformByName cubeProg "light.ambient" (0.1 :: V3 Float)
+        setUniformByName cubeProg "light.diffuse" (1 :: V3 Float)
+        setUniformByName cubeProg "light.specular" (1 :: V3 Float)
+        setUniformByName cubeProg "light.position" lightPos
       cubeModel <- getUniform cubeProg "model"
-      cubeProj <- getUniform cubeProg "projection"
-      cubeLightCol <- getUniform cubeProg "lightColor"
-      cubeLightPos <- getUniform cubeProg "lightPos"
+      cubeView <- getUniform cubeProg "view"
       cubeViewPos <- getUniform cubeProg "viewPos"
-      cubeSelfCol <- getUniform cubeProg "objectColor"
       lightView <- getUniform lightProg "view"
-      lightModel <- getUniform lightProg "model"
-      lightProj <- getUniform lightProg "projection"
-      lightCol <- getUniform lightProg "lightColor"
       pure AppEnv {..}
     loop (AppEnv {..}) sInit =
       flip runStateT sInit $ do
         pos .= V3 0 0 6
-        -- front .= -unit _z
-        -- up    .= unit _y
         yaw .= (-90 / 180 * pi)
         bufferSwapLoop $ \dt -> do
-          () <- do
+          do
             let sensitivity = 0.1
             (cx', cy') <- use cursorPrev
             c@(cx, cy) <- getCursorPos
@@ -170,7 +183,6 @@ main = withWindow defaultHints $ do
             yaw += realToFrac (cx - cx') / 180 * pi * sensitivity
             pitch -= realToFrac (cy - cy') / 180 * pi * sensitivity
             pitch %= min 1 . max (-1)
-          -- pitch %= const 0
           front <- do
             p <- use pitch
             y <- use yaw
@@ -197,32 +209,21 @@ main = withWindow defaultHints $ do
           time <- getTime
           x <- use pos
           let view = lookAt x (x + front) up
-          let lightPos = V3 1.2 1 2
           --
           useProgram cubeProg
-          setUniform cubeSelfCol (V3 1 0.5 0.31)
-          setUniform cubeLightCol 1
-          setUniform cubeLightPos lightPos
           setUniform cubeModel $ mkTransformation (axisAngle (V3 0.5 1 0) (time / 9 * pi)) 0
           setUniform cubeViewPos x
           setUniform cubeView view
-          setUniform cubeProj projectionM
           bindArray cubeVAO
           glDrawArrays GL_TRIANGLES 0 36
           unbindArray
           --
           useProgram lightProg
-          setUniform lightCol 1
-          setUniform lightModel $
-            identity
-              & translation .~ lightPos
-              & _m33 %~ (* 0.2)
           setUniform lightView view
-          setUniform lightProj projectionM
           bindArray lightVAO
           glDrawArrays GL_TRIANGLES 0 36
-          -- glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_INT nullPtr
-          --
           unbindArray
-          quit <- fmap or . mapM isKeyPressed $ [Key'Escape, Key'Q]
-          return quit
+          --
+          fmap or . mapM isKeyPressed $ [Key'Escape, Key'Q]
+          -- TODO - use shouldClose
+          -- return quit

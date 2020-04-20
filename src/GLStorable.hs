@@ -24,7 +24,11 @@ instance GLUniform (M44 Float) where
 instance GLUniform (V3 Float) where
   setUniform (Uniform ptr) (V3 a b c) = glUniform3f ptr a b c
 
-instance GLUniform GLint where setUniform (Uniform ptr) = glUniform1i ptr
+instance GLUniform Float where
+  setUniform (Uniform ptr) = glUniform1f ptr
+
+instance GLUniform TextureUnit where
+  setUniform (Uniform ptr) (TextureUnit slot) = glUniform1i ptr slot
 
 data VertexAttribs
   = VertexAttribs
