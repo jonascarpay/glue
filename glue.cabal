@@ -22,18 +22,23 @@ library
     Window
     GLStorable
     Types
+    Mesh
+    Obj
   build-depends:
       base >= 4.7 && < 5
-    , mtl
-    , containers
-    , linear
-    , parsec
-    , storable-tuple
-    , gl
     , GLFW-b
     , JuicyPixels
-    , vector
+    , attoparsec
+    , containers
+    , gl
     , lens
+    , linear
+    , mtl
+    , parsec
+    , storable-record
+    , storable-tuple
+    , text
+    , vector
 
 executable glue
   hs-source-dirs:      app

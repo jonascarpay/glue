@@ -92,8 +92,22 @@ verticesNormals =
     (V3 (-0.5) (0.5) (-0.5), V3 0 1 0, V2 0 1)
   ]
 
+positions :: [V3 Float]
+positions =
+  [ V3 0 0 0,
+    V3 (2.0) (5.0) (-15.0),
+    V3 (-1.5) (-2.2) (-2.5),
+    V3 (-3.8) (-2.0) (-12.3),
+    V3 (2.4) (-0.4) (-3.5),
+    V3 (-1.7) (3.0) (-7.5),
+    V3 (1.3) (-2.0) (-2.5),
+    V3 (1.5) (2.0) (-2.5),
+    V3 (1.5) (0.2) (-1.5),
+    V3 (-1.3) (1.0) (-1.5)
+  ]
+
 lightPos :: V3 Float
-lightPos = V3 1.2 1 2
+lightPos = sum positions / fromIntegral (length positions)
 
 lightModel :: M44 Float
 lightModel = identity & translation .~ lightPos & _m33 %~ (* 0.2)
@@ -106,7 +120,7 @@ cameraSpeed = 2.5
 
 main :: IO ()
 main = withWindow defaultHints $ do
-  hideCursor
+  -- hideCursor
   (menv, log) <- runWriterT $ runExceptT buildEnvironment
   liftIO $ putStrLn log
   case menv of
@@ -164,6 +178,7 @@ main = withWindow defaultHints $ do
         setUniformByName cubeProg "light.ambient" (0.1 :: V3 Float)
         setUniformByName cubeProg "light.diffuse" (1 :: V3 Float)
         setUniformByName cubeProg "light.specular" (1 :: V3 Float)
+        -- setUniformByName cubeProg "light.direction" (- unit _y :: V3 Float)
         setUniformByName cubeProg "light.position" lightPos
       cubeModel <- getUniform cubeProg "model"
       cubeView <- getUniform cubeProg "view"
@@ -211,11 +226,13 @@ main = withWindow defaultHints $ do
           let view = lookAt x (x + front) up
           --
           useProgram cubeProg
-          setUniform cubeModel $ mkTransformation (axisAngle (V3 0.5 1 0) (time / 9 * pi)) 0
+          -- setUniform cubeModel $ mkTransformation (axisAngle (V3 0.5 1 0) (time / 3 * pi)) 0
           setUniform cubeViewPos x
           setUniform cubeView view
           bindArray cubeVAO
-          glDrawArrays GL_TRIANGLES 0 36
+          forM_ positions $ \cubePos -> do
+            setUniform cubeModel $ mkTransformation (axisAngle (V3 0.5 1 0) (time / 3 * pi)) cubePos
+            glDrawArrays GL_TRIANGLES 0 36
           unbindArray
           --
           useProgram lightProg
@@ -225,5 +242,5 @@ main = withWindow defaultHints $ do
           unbindArray
           --
           fmap or . mapM isKeyPressed $ [Key'Escape, Key'Q]
-          -- TODO - use shouldClose
-          -- return quit
+-- TODO - use shouldClose
+-- return quit
