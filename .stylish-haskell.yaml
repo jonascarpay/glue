@@ -1,6 +1,0 @@
-steps:
-  - simple_align: {}
-  - imports:
-      align: group
-  - language_pragmas: {}
-  - trailing_whitespace: {}

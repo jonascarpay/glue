@@ -1,43 +1,55 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Mesh
-  ( Mesh,
+  ( Mesh (..),
+    setupMesh,
+    GPUMesh (..),
+    drawMesh,
+    triangle,
+    mkMesh,
+    toVertexList,
   )
 where
 
 import Control.Monad.IO.Class
-import qualified Data.Vector as V
+import Data.Foldable (foldl')
+import qualified Data.Map as M
 import qualified Data.Vector.Storable as VS
-import Data.Word (Word32)
+import Data.Word
 import Foreign.Ptr
 import Foreign.Storable
 import GLStorable
 import Graphics.GL.Core33
+import Graphics.GL.Types
 import Lib
+import Linear
 import Types
 import Window
 
 data Mesh v
   = Mesh
       { vertices :: VS.Vector v,
-        indices :: VS.Vector Word32,
-        textures :: V.Vector Texture'
+        indices :: VS.Vector Word32
       }
   deriving (Eq, Show)
 
-data Texture'
-  = Texture'
-      { texID :: Int,
-        texType :: TextureType
-      }
-  deriving (Eq, Show)
+mkMesh :: forall v. (Storable v, Ord v) => [v] -> Mesh v
+mkMesh vs = Mesh (VS.fromList $ reverse stack) (VS.fromList $ (imap M.!) <$> vs)
+  where
+    (imap, _, stack) :: (M.Map v Word32, Word32, [v]) =
+      let f (!imap, !n, !stack) v
+            | M.member v imap = (imap, n, stack)
+            | otherwise = (M.insert v n imap, succ n, v : stack)
+       in foldl' f (mempty, 0, mempty) vs
 
-data TextureType = Diffuse | Specular | Bump
-  deriving (Eq, Show)
+toVertexList :: VS.Storable v => Mesh v -> [v]
+toVertexList (Mesh vs is) = map (vs VS.!) . fmap fromIntegral . VS.toList $ is
 
-setupMesh :: forall m v. (GLVertex v, MonadWindow m) => Mesh v -> m ()
-setupMesh (Mesh v i t) = do
+setupMesh :: forall m v. (Show v, GLVertex v, MonadWindow m) => Mesh v -> m GPUMesh
+setupMesh (Mesh v i) = do
   vao <- genArray
   Buffer vbo <- genBuffer
   Buffer ebo <- genBuffer
@@ -46,8 +58,30 @@ setupMesh (Mesh v i t) = do
   liftIO $ VS.unsafeWith v $ \ptr ->
     let bytes = VS.length v * sizeOf (undefined :: v)
      in glBufferData GL_ARRAY_BUFFER (fromIntegral bytes) (castPtr ptr) GL_STATIC_DRAW
-  glBindBuffer GL_ARRAY_BUFFER ebo
+  glBindBuffer GL_ELEMENT_ARRAY_BUFFER ebo
   liftIO $ VS.unsafeWith i $ \ptr ->
     let bytes = VS.length i * sizeOf (undefined :: Word32)
-     in glBufferData GL_ARRAY_BUFFER (fromIntegral bytes) (castPtr ptr) GL_STATIC_DRAW
+     in glBufferData GL_ELEMENT_ARRAY_BUFFER (fromIntegral bytes) (castPtr ptr) GL_STATIC_DRAW
   setVertexAttribs v
+  unbindArray
+  pure $ GPUMesh vao (Buffer vbo) (Buffer ebo) (fromIntegral $ 3 * VS.length i)
+
+triangle :: Mesh (V3 Float)
+triangle =
+  Mesh
+    (VS.fromList [V3 (-0.5) (-0.5) 0, V3 0.5 (-0.5) 0, V3 0 0.5 0])
+    (VS.fromList [0, 1, 2])
+
+data GPUMesh
+  = GPUMesh
+      { meshVAO :: VAO,
+        meshVBO :: Buffer,
+        meshIndexBuffer :: Buffer,
+        meshIndexCount :: GLsizei
+      }
+
+drawMesh :: MonadWindow m => GPUMesh -> m ()
+drawMesh (GPUMesh vao _ _ n) = do
+  bindArray vao
+  glDrawElements GL_TRIANGLES n GL_UNSIGNED_INT nullPtr
+  unbindArray

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Obj where
 
@@ -6,10 +7,13 @@ import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.Text as P
 import Data.Char
+import Data.Foldable (toList)
+import qualified Data.IntMap as M
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Word (Word32)
 import Linear
+import Mesh
 
 loadObj :: FilePath -> IO (Either String ObjFile)
 loadObj path = parseOnly parseObj <$> T.readFile path
@@ -17,9 +21,18 @@ loadObj path = parseOnly parseObj <$> T.readFile path
 loadMat :: FilePath -> IO (Either String [Material])
 loadMat path = parseOnly parseMtl <$> T.readFile path
 
+toMesh :: ObjFile -> [Mesh (V3 Float, V3 Float, V2 Float)]
+toMesh (ObjFile _ objs) = mkMesh . mkVertices . objFaces <$> objs
+  where
+    positionMap = M.fromList $ zip [1 ..] (objs >>= objVertices)
+    normalMap = M.fromList $ zip [1 ..] (objs >>= objNormals)
+    tcoordMap = M.fromList $ zip [1 ..] (objs >>= objTexCoords)
+    mkVertices = map mkVertex . (>>= toList)
+    mkVertex (V3 x t n) = (positionMap M.! x, normalMap M.! n, tcoordMap M.! t)
+
 data ObjFile
   = ObjFile
-      { fileMtl :: String,
+      { fileMtl :: FilePath,
         fileObjs :: [Object]
       }
   deriving (Eq, Show)
@@ -31,7 +44,7 @@ data Object
         objVertices :: [V3 Float],
         objNormals :: [V3 Float],
         objTexCoords :: [V2 Float],
-        objFaces :: [M33 Word32]
+        objFaces :: [M33 Int]
       }
   deriving (Eq, Show)
 
@@ -58,7 +71,7 @@ parseMtl = do
     skipMany endOfLine
     Material
       <$> newmtl
-      <*> exponent
+      <*> specularExp
       <*> ambientRGB
       <*> diffuseRGB
       <*> specularRGB
@@ -75,7 +88,7 @@ parseMtl = do
     diffuseRGB = string "Kd" *> v3 <* endOfLine
     specularRGB = string "Ks" *> v3 <* endOfLine
     density = string "Ni" *> float <* endOfLine
-    exponent = string "Ns" *> float <* endOfLine
+    specularExp = string "Ns" *> float <* endOfLine
     dissolve = char 'd' *> float <* endOfLine
     mapDiff = string "map_Kd" *> name <* endOfLine
     mapBump = string "map_Bump" *> name <* endOfLine
@@ -117,7 +130,7 @@ parseObj = do
     vts <- many textureCoords <?> (obj <> " textures coords")
     vns <- many normal <?> (obj <> " vertex normals")
     mtl <- useMtl <?> (obj <> " material")
-    _ <- group <?> (obj <> " group")
+    _ :: Int <- group <?> (obj <> " group")
     faces <- many face <?> (obj <> " material")
     pure $ Object obj mtl vs vns vts faces
   pure $ ObjFile file objs
@@ -126,17 +139,17 @@ parseObj = do
     textureCoords = string "vt" *> v2 <* endOfLine
     normal = string "vn" *> v3 <* endOfLine
     group = char 's' *> hSpace *> decimal <* endOfLine
-    object = char 'o' *> hSpace *> name <* endOfLine
-    useMtl = string "usemtl" *> hSpace *> name <* endOfLine
-    mtlLib = string "mtllib" *> hSpace *> name <* endOfLine
-    face1 :: Parser (V3 Word32)
+    object = char 'o' *> name <* endOfLine
+    useMtl = string "usemtl" *> name <* endOfLine
+    mtlLib = string "mtllib" *> name <* endOfLine
+    face1 :: Parser (V3 Int)
     face1 = do
       fv <- decimal <* char '/'
       ft <- decimal <* char '/'
       fn <- decimal
       pure (V3 fv ft fn)
-    face :: Parser (M33 Word32)
+    face :: Parser (M33 Int)
     face = do
       _ <- char 'f'
-      let p = hSpace >> face1
+      let p = hSpace *> face1
       V3 <$> p <*> p <*> p <* endOfLine

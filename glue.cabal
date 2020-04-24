@@ -59,3 +59,20 @@ executable glue
     , vector
   ghc-options:
     -Wall
+
+test-suite glue-test
+  hs-source-dirs:
+    test
+  default-language:
+    Haskell2010
+  build-depends:
+      base
+    , tasty
+    , glue
+    , vector
+    , containers
+    , tasty-quickcheck
+  main-is:
+    Main.hs
+  type:
+    exitcode-stdio-1.0
