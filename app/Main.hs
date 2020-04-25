@@ -59,6 +59,18 @@ lightPos = V3 5 3 0
 projectionM :: M44 Float
 projectionM = perspective (45 / 180 * pi) (640 / 480) 0.1 100
 
+objInit :: MaterialInitializer ObjectMat
+objInit f =
+  ObjectMat
+    <$> f objView 0 "view"
+    <*> f objModel identity "model"
+    <*> f objProj projectionM "projection"
+    <*> f objViewPos 0 "viewPos"
+    <*> f objLightAmbient 0.1 "light.ambient"
+    <*> f objLightDiffuse 1 "light.diffuse"
+    <*> f objLightSpecular (V3 0 1 0) "light.specular"
+    <*> f objLightPosition lightPos "light.position"
+
 cameraSpeed :: Float
 cameraSpeed = 2.5
 
@@ -79,23 +91,12 @@ main = withWindow defaultHints $ do
       --
       glEnable GL_DEPTH_TEST
       --
-      (cubeProg, log) <-
-        createProgram "glsl/common.vert" "glsl/object.frag" $ \f ->
-          ObjectMat
-            <$> f objView 0 "view"
-            <*> f objModel identity "model"
-            <*> f objProj projectionM "projection"
-            <*> f objViewPos 0 "viewPos"
-            <*> f objLightAmbient 0.1 "light.ambient"
-            <*> f objLightDiffuse 1 "light.diffuse"
-            <*> f objLightSpecular (V3 0 1 0) "light.specular"
-            <*> f objLightPosition lightPos "light.position"
+      (cubeProg, log) <- createProgram "glsl/common.vert" "glsl/object.frag" objInit
       forM_ log $ liftIO . print . ppProgramLog
-      meshes <- do
-        objs <-
-          liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
-            >>= either (throwError . ProgramLinkError) pure
-        traverse setupMesh (toMesh objs)
+      meshes <-
+        liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
+          >>= either (throwError . ProgramLinkError) pure
+          >>= traverse setupMesh . toMesh
       --
       pure AppEnv {..}
     loop AppEnv {..} sInit =
