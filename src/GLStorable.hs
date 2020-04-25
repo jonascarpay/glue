@@ -6,29 +6,11 @@
 
 module GLStorable where
 
-import Control.Monad.IO.Class
 import Foreign as F
 import Foreign.Storable.Tuple ()
 import Graphics.GL.Core33 as GL
 import Graphics.GL.Types as GL
 import Linear
-import Types
-
-class GLUniform a where
-  setUniform :: MonadIO m => Uniform a -> a -> m ()
-
-instance GLUniform (M44 Float) where
-  setUniform (Uniform ptr) x =
-    liftIO $ F.with x $ glUniformMatrix4fv ptr 1 GL_TRUE . castPtr
-
-instance GLUniform (V3 Float) where
-  setUniform (Uniform ptr) (V3 a b c) = glUniform3f ptr a b c
-
-instance GLUniform Float where
-  setUniform (Uniform ptr) = glUniform1f ptr
-
-instance GLUniform TextureUnit where
-  setUniform (Uniform ptr) (TextureUnit slot) = glUniform1i ptr slot
 
 data VertexAttribs
   = VertexAttribs

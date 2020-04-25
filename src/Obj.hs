@@ -24,11 +24,11 @@ loadMat path = parseOnly parseMtl <$> T.readFile path
 toMesh :: ObjFile -> [Mesh (V3 Float, V3 Float, V2 Float)]
 toMesh (ObjFile _ objs) = mkMesh . mkVertices . objFaces <$> objs
   where
-    positionMap = M.fromList $ zip [1 ..] (objs >>= objVertices)
-    normalMap = M.fromList $ zip [1 ..] (objs >>= objNormals)
-    tcoordMap = M.fromList $ zip [1 ..] (objs >>= objTexCoords)
+    posMap = M.fromList $ zip [1 ..] (objs >>= objVertices)
+    nmlMap = M.fromList $ zip [1 ..] (objs >>= objNormals)
+    txcMap = M.fromList $ zip [1 ..] (objs >>= objTexCoords)
     mkVertices = map mkVertex . (>>= toList)
-    mkVertex (V3 x t n) = (positionMap M.! x, normalMap M.! n, tcoordMap M.! t)
+    mkVertex (V3 x t n) = (posMap M.! x, nmlMap M.! n, txcMap M.! t)
 
 data ObjFile
   = ObjFile
@@ -143,11 +143,11 @@ parseObj = do
     useMtl = string "usemtl" *> name <* endOfLine
     mtlLib = string "mtllib" *> name <* endOfLine
     face1 :: Parser (V3 Int)
-    face1 = do
-      fv <- decimal <* char '/'
-      ft <- decimal <* char '/'
-      fn <- decimal
-      pure (V3 fv ft fn)
+    face1 =
+      V3
+        <$> (decimal <* char '/')
+        <*> (decimal <* char '/')
+        <*> decimal
     face :: Parser (M33 Int)
     face = do
       _ <- char 'f'

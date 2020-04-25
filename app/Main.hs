@@ -14,24 +14,33 @@ import Control.Lens hiding (indices, transform)
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Writer
-import GLStorable
 import Graphics.GL.Core33 as GL
 import Graphics.UI.GLFW as GLFW hiding (getCursorPos, getTime)
-import Lib
 import Linear
 import Mesh
 import NonGL
 import Obj
-import Types
+import Program
 import Window
+
+data ObjectMat f
+  = ObjectMat
+      { objView :: f (M44 Float),
+        objModel :: f (M44 Float),
+        objProj :: f (M44 Float),
+        objViewPos :: f (V3 Float),
+        objLightAmbient :: f (V3 Float),
+        objLightDiffuse :: f (V3 Float),
+        objLightSpecular :: f (V3 Float),
+        objLightPosition :: f (V3 Float)
+      }
+
+type ObjVert = (V3 Float, V3 Float, V2 Float)
 
 data AppEnv
   = AppEnv
-      { cubeView :: Uniform (M44 Float),
-        cubeModel :: Uniform (M44 Float),
-        cubeViewPos :: Uniform (V3 Float),
-        cubeProg :: Program,
-        meshes :: [GPUMesh]
+      { cubeProg :: Program ObjectMat ObjVert,
+        meshes :: [GPUMesh ObjVert]
       }
 
 data AppState
@@ -59,42 +68,35 @@ main = withWindow defaultHints $ do
   (menv, log) <- runWriterT $ runExceptT buildEnvironment
   liftIO $ putStrLn log
   case menv of
-    Left err -> liftIO . putStrLn . showShaderError $ err
+    Left err -> liftIO . putStrLn . ppProgramError $ err
     Right env -> do
       p <- getCursorPos
       loop env (AppState 0 0 0 p)
       pure ()
   where
-    buildEnvironment :: ExceptT ShaderError (WriterT String (WindowT IO)) AppEnv
+    buildEnvironment :: ExceptT ProgramError (WriterT String (WindowT IO)) AppEnv
     buildEnvironment = do
       --
       glEnable GL_DEPTH_TEST
       --
-      cubeProg <-
-        createShaderProgram
-          [ ("glsl/common.vert", GL_VERTEX_SHADER),
-            ("glsl/object.frag", GL_FRAGMENT_SHADER)
-          ]
+      (cubeProg, log) <-
+        createProgram "glsl/common.vert" "glsl/object.frag" $ \f ->
+          ObjectMat
+            <$> f objView 0 "view"
+            <*> f objModel identity "model"
+            <*> f objProj projectionM "projection"
+            <*> f objViewPos 0 "viewPos"
+            <*> f objLightAmbient 0.1 "light.ambient"
+            <*> f objLightDiffuse 1 "light.diffuse"
+            <*> f objLightSpecular (V3 0 1 0) "light.specular"
+            <*> f objLightPosition lightPos "light.position"
+      forM_ log $ liftIO . print . ppProgramLog
       meshes <- do
         objs <-
           liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
-            >>= either (throwError . OtherError) pure
+            >>= either (throwError . ProgramLinkError) pure
         traverse setupMesh (toMesh objs)
       --
-      do
-        useProgram cubeProg -- Can only set after binding
-          -- setUniformByName cubeProg "material.shininess" (32 :: Float)
-          -- setUniformByName cubeProg "material.diffuse" (0 :: TextureUnit)
-          -- setUniformByName cubeProg "material.specular" (1 :: TextureUnit)
-        setUniformByName cubeProg "projection" projectionM
-      setUniformByName cubeProg "light.ambient" (0.1 :: V3 Float)
-      setUniformByName cubeProg "light.diffuse" (1 :: V3 Float)
-      setUniformByName cubeProg "light.specular" (1 :: V3 Float)
-      -- setUniformByName cubeProg "light.direction" (- unit _y :: V3 Float)
-      setUniformByName cubeProg "light.position" lightPos
-      cubeModel <- getUniform cubeProg "model"
-      cubeView <- getUniform cubeProg "view"
-      cubeViewPos <- getUniform cubeProg "viewPos"
       pure AppEnv {..}
     loop AppEnv {..} sInit =
       flip runStateT sInit $ do
@@ -130,11 +132,11 @@ main = withWindow defaultHints $ do
           x <- use pos
           let view = lookAt x (x + front) up
           --
-          useProgram cubeProg
-          setUniform cubeViewPos x
-          setUniform cubeView view
-          setUniform cubeModel identity
-          forM_ meshes drawMesh
+          runProgramT cubeProg $ do
+            setUniform objViewPos x
+            setUniform objView view
+            setUniform objModel identity
+            forM_ meshes drawMesh
           --
           fmap or . mapM isKeyPressed $ [Key'Escape, Key'Q]
 -- TODO - use shouldClose

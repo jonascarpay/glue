@@ -26,6 +26,7 @@ import Graphics.GL.Core33
 import Graphics.GL.Types
 import Lib
 import Linear
+import Program
 import Types
 import Window
 
@@ -48,7 +49,7 @@ mkMesh vs = Mesh (VS.fromList $ reverse stack) (VS.fromList $ (imap M.!) <$> vs)
 toVertexList :: VS.Storable v => Mesh v -> [v]
 toVertexList (Mesh vs is) = map (vs VS.!) . fmap fromIntegral . VS.toList $ is
 
-setupMesh :: forall m v. (Show v, GLVertex v, MonadWindow m) => Mesh v -> m GPUMesh
+setupMesh :: forall m v. (Show v, GLVertex v, MonadWindow m) => Mesh v -> m (GPUMesh v)
 setupMesh (Mesh v i) = do
   vao <- genArray
   Buffer vbo <- genBuffer
@@ -72,7 +73,7 @@ triangle =
     (VS.fromList [V3 (-0.5) (-0.5) 0, V3 0.5 (-0.5) 0, V3 0 0.5 0])
     (VS.fromList [0, 1, 2])
 
-data GPUMesh
+data GPUMesh v
   = GPUMesh
       { meshVAO :: VAO,
         meshVBO :: Buffer,
@@ -80,8 +81,8 @@ data GPUMesh
         meshIndexCount :: GLsizei
       }
 
-drawMesh :: MonadWindow m => GPUMesh -> m ()
-drawMesh (GPUMesh vao _ _ n) = do
+drawMesh :: MonadWindow m => GPUMesh v -> ProgramT mat v m ()
+drawMesh (GPUMesh vao _ _ n) = ProgramT $ do
   bindArray vao
   glDrawElements GL_TRIANGLES n GL_UNSIGNED_INT nullPtr
   unbindArray

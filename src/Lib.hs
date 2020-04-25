@@ -11,13 +11,9 @@ module Lib where
 
 import Codec.Picture as Pic hiding (Uniform)
 import Control.Lens
-import Control.Monad
 import Control.Monad.Except
-import Control.Monad.Writer
 import Data.Maybe (fromJust)
-import Data.Vector.Storable (unsafeWith)
 import Foreign as F
-import Foreign.C.String as F
 import GLStorable
 import Graphics.GL.Core33 as GL
 import Graphics.GL.Types as GL
@@ -25,80 +21,6 @@ import Graphics.UI.GLFW as GLFW
 import Linear hiding (norm)
 import Types
 import Window
-
-data ShaderError
-  = ShaderObjectError
-  | ShaderCompilationError FilePath
-  | ProgramLinkError
-  | UniformNotFound String
-  | MissingFileError String
-  | OtherError String
-
-showShaderError :: ShaderError -> String
-showShaderError ShaderObjectError = "Error while creating shader object"
-showShaderError (ShaderCompilationError path) =
-  "Error while compiling " <> path
-showShaderError ProgramLinkError =
-  "Error while linking"
-showShaderError (UniformNotFound name) = "Uniform not found: " <> name
-showShaderError (MissingFileError path) = "File not found: " <> path
-showShaderError (OtherError err) = err
-
--- TODO -- infer shaderType from file extension
-createShader :: MonadIO m => FilePath -> GLenum -> ExceptT ShaderError (WriterT String m) GLenum
-createShader filename shaderType = do
-  shaderId <- liftIO $ glCreateShader shaderType
-  when (shaderId == 0) $ throwError ShaderObjectError
-  shaderSrc <- liftIO $ readFile filename
-  compileSuccess <- liftIO $ do
-    F.withCString shaderSrc $ \src' ->
-      F.with src' $ \src'' ->
-        F.alloca $ \success -> do
-          glShaderSource shaderId 1 src'' F.nullPtr
-          glCompileShader shaderId
-          glGetShaderiv shaderId GL_COMPILE_STATUS success
-          (/= 0) <$> F.peek success
-  compileLog <- liftIO $ do
-    let resultBytes = 512
-    F.allocaBytes resultBytes $ \res -> do
-      glGetShaderInfoLog shaderId (fromIntegral resultBytes) F.nullPtr res
-      F.peekCString res
-  tell compileLog
-  if compileSuccess
-    then pure shaderId
-    else throwError (ShaderCompilationError filename)
-
-createShaderProgram :: MonadIO m => [(FilePath, GLenum)] -> ExceptT ShaderError (WriterT String m) Program
-createShaderProgram paths = do
-  shaders <- mapM (uncurry createShader) paths
-  programId <- glCreateProgram
-  linkSuccess <- liftIO $ do
-    forM_ shaders $ glAttachShader programId
-    glLinkProgram programId
-    F.alloca $ \success -> do
-      glGetProgramiv programId GL_LINK_STATUS success
-      (/= 0) <$> F.peek success
-  linkLog <- liftIO $ do
-    let resultBytes = 512
-    F.allocaBytes resultBytes $ \res -> do
-      glGetProgramInfoLog programId (fromIntegral resultBytes) F.nullPtr res
-      F.peekCString res
-  tell linkLog
-  if linkSuccess
-    then do
-      liftIO $ forM_ shaders glDeleteShader
-      pure (Program programId)
-    else throwError ProgramLinkError
-
-getUniform :: MonadIO m => Program -> String -> ExceptT ShaderError m (Uniform a)
-getUniform (Program program) name = do
-  uni <- liftIO $ withCString name $ glGetUniformLocation program
-  case uni of
-    -1 -> throwError $ UniformNotFound name
-    n -> pure $ Uniform n
-
-setUniformByName :: (MonadIO m, GLUniform a) => Program -> String -> a -> ExceptT ShaderError m ()
-setUniformByName prog name x = getUniform prog name >>= flip setUniform x
 
 -- TODO waarom bestaat dit niet?
 withArraySize :: forall e a. F.Storable e => [e] -> (GLsizeiptr -> F.Ptr e -> IO a) -> IO a
@@ -142,41 +64,41 @@ setVertexAttribs _ = liftIO $ go attribList 0 0
       glEnableVertexAttribArray n
       go as (n + 1) (off + size * 4)
 
--- Warning; Doesn't just allocate a texture and load data into it;
--- uploading to GPU also necessarily binds texture to active texture unit
-loadTextureRGB2D ::
-  MonadIO m =>
-  FilePath ->
-  Bool ->
-  Bool ->
-  ExceptT ShaderError m Texture
-loadTextureRGB2D path flipX flipY = do
-  img <- withExceptT MissingFileError . ExceptT . liftIO $ readImage path
-  let (Image imgW imgH imgData) = flipImg flipX flipY . convertRGB8 $ img
-  tex <- liftIO $ alloca $ \tex' -> do
-    glGenTextures 1 tex'
-    peek tex'
-  glBindTexture GL_TEXTURE_2D tex
-  liftIO $ unsafeWith imgData $ \imgPtr ->
-    glTexImage2D
-      GL_TEXTURE_2D
-      0
-      GL_RGB
-      (fromIntegral imgW)
-      (fromIntegral imgH)
-      0
-      GL_RGB
-      GL_UNSIGNED_BYTE
-      (castPtr imgPtr)
-  glGenerateMipmap GL_TEXTURE_2D
-  mapM_
-    (uncurry $ glTexParameteri GL_TEXTURE_2D)
-    [ (GL_TEXTURE_WRAP_S, GL_REPEAT),
-      (GL_TEXTURE_WRAP_T, GL_REPEAT),
-      (GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR),
-      (GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    ]
-  pure $ Texture tex
+-- -- Warning; Doesn't just allocate a texture and load data into it;
+-- -- uploading to GPU also necessarily binds texture to active texture unit
+-- loadTextureRGB2D ::
+--   MonadIO m =>
+--   FilePath ->
+--   Bool ->
+--   Bool ->
+--   ExceptT ShaderError m Texture
+-- loadTextureRGB2D path flipX flipY = do
+--   img <- withExceptT MissingFileError . ExceptT . liftIO $ readImage path
+--   let (Image imgW imgH imgData) = flipImg flipX flipY . convertRGB8 $ img
+--   tex <- liftIO $ alloca $ \tex' -> do
+--     glGenTextures 1 tex'
+--     peek tex'
+--   glBindTexture GL_TEXTURE_2D tex
+--   liftIO $ unsafeWith imgData $ \imgPtr ->
+--     glTexImage2D
+--       GL_TEXTURE_2D
+--       0
+--       GL_RGB
+--       (fromIntegral imgW)
+--       (fromIntegral imgH)
+--       0
+--       GL_RGB
+--       GL_UNSIGNED_BYTE
+--       (castPtr imgPtr)
+--   glGenerateMipmap GL_TEXTURE_2D
+--   mapM_
+--     (uncurry $ glTexParameteri GL_TEXTURE_2D)
+--     [ (GL_TEXTURE_WRAP_S, GL_REPEAT),
+--       (GL_TEXTURE_WRAP_T, GL_REPEAT),
+--       (GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR),
+--       (GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+--     ]
+--   pure $ Texture tex
 
 getTime :: MonadWindow m => m Float
 getTime = liftIO $ realToFrac . fromJust <$> GLFW.getTime
@@ -190,6 +112,3 @@ flipImg flipX flipY img = generateImage f (imageWidth img) (imageHeight img)
 
 translate :: Num a => V3 a -> M44 a
 translate v = identity & translation .~ v
-
-useProgram :: MonadIO m => Program -> m ()
-useProgram = glUseProgram . unProgram

@@ -21,9 +21,11 @@ library
     Lib
     Window
     GLStorable
+    Program
     Types
     Mesh
     Obj
+    Uniform
   build-depends:
       base >= 4.7 && < 5
     , GLFW-b
