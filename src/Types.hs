@@ -4,8 +4,6 @@ module Types where
 
 import Graphics.GL.Types as GL
 
-newtype Texture = Texture {unTexture :: GLuint}
-
 newtype TextureUnit = TextureUnit {unTextureUnit :: GLint}
   deriving (Num)
 

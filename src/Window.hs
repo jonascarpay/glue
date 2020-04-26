@@ -54,7 +54,7 @@ withWindow hints (WindowT act) = do
 
 defaultHints :: [WindowHint]
 defaultHints =
-  [ WindowHint'ContextVersionMajor 3,
+  [ WindowHint'ContextVersionMajor 4,
     WindowHint'ContextVersionMinor 3,
     WindowHint'OpenGLProfile OpenGLProfile'Core,
     WindowHint'OpenGLForwardCompat True,

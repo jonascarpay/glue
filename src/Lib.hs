@@ -9,7 +9,6 @@
 
 module Lib where
 
-import Codec.Picture as Pic hiding (Uniform)
 import Control.Lens
 import Control.Monad.Except
 import Data.Maybe (fromJust)
@@ -64,51 +63,8 @@ setVertexAttribs _ = liftIO $ go attribList 0 0
       glEnableVertexAttribArray n
       go as (n + 1) (off + size * 4)
 
--- -- Warning; Doesn't just allocate a texture and load data into it;
--- -- uploading to GPU also necessarily binds texture to active texture unit
--- loadTextureRGB2D ::
---   MonadIO m =>
---   FilePath ->
---   Bool ->
---   Bool ->
---   ExceptT ShaderError m Texture
--- loadTextureRGB2D path flipX flipY = do
---   img <- withExceptT MissingFileError . ExceptT . liftIO $ readImage path
---   let (Image imgW imgH imgData) = flipImg flipX flipY . convertRGB8 $ img
---   tex <- liftIO $ alloca $ \tex' -> do
---     glGenTextures 1 tex'
---     peek tex'
---   glBindTexture GL_TEXTURE_2D tex
---   liftIO $ unsafeWith imgData $ \imgPtr ->
---     glTexImage2D
---       GL_TEXTURE_2D
---       0
---       GL_RGB
---       (fromIntegral imgW)
---       (fromIntegral imgH)
---       0
---       GL_RGB
---       GL_UNSIGNED_BYTE
---       (castPtr imgPtr)
---   glGenerateMipmap GL_TEXTURE_2D
---   mapM_
---     (uncurry $ glTexParameteri GL_TEXTURE_2D)
---     [ (GL_TEXTURE_WRAP_S, GL_REPEAT),
---       (GL_TEXTURE_WRAP_T, GL_REPEAT),
---       (GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR),
---       (GL_TEXTURE_MAG_FILTER, GL_LINEAR)
---     ]
---   pure $ Texture tex
-
 getTime :: MonadWindow m => m Float
 getTime = liftIO $ realToFrac . fromJust <$> GLFW.getTime
-
-flipImg :: Pixel a => Bool -> Bool -> Pic.Image a -> Pic.Image a
-flipImg flipX flipY img = generateImage f (imageWidth img) (imageHeight img)
-  where
-    w' = imageWidth img - 1
-    h' = imageHeight img - 1
-    f x y = pixelAt img (if flipX then w' - x else x) (if flipY then h' - y else y)
 
 translate :: Num a => V3 a -> M44 a
 translate v = identity & translation .~ v

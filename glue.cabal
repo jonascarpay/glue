@@ -22,6 +22,7 @@ library
     Window
     GLStorable
     Program
+    Texture
     Types
     Mesh
     Obj

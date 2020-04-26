@@ -13,7 +13,6 @@
 import Control.Lens hiding (indices, transform)
 import Control.Monad.Except
 import Control.Monad.State
-import Control.Monad.Writer
 import Data.Int (Int32)
 import Graphics.GL.Core33 as GL
 import Graphics.UI.GLFW as GLFW hiding (getCursorPos, getTime)
@@ -22,6 +21,7 @@ import Mesh
 import NonGL
 import Obj
 import Program
+import Texture
 import Window
 
 data AppState
@@ -38,7 +38,7 @@ type ObjVert = (V3 Float, V3 Float, V2 Float)
 
 data AppEnv
   = AppEnv
-      { cubeProg :: Program ObjectMat ObjVert,
+      { program :: Program ObjectMat ObjVert,
         meshes :: [GPUMesh ObjVert]
       }
 
@@ -63,6 +63,17 @@ data ObjectMat f
         objShininess :: f Float
       }
 
+cube :: Mesh ObjVert
+cube = fromVertexList $ do
+  V3 i j k <- [identity, - identity]
+  rot <- [V3 i j k, V3 k i j, V3 j k i]
+  let [a, b, c, d] = do
+        x <- [0, 1]
+        y <- [0, 1]
+        let v = V3 (2 * x -1) (2 * y -1) 1
+        pure (rot !* v, rot !* unit _z, V2 x y)
+   in [a, b, c, b, c, d]
+
 objInit :: MaterialInitializer ObjectMat
 objInit f =
   ObjectMat
@@ -72,39 +83,45 @@ objInit f =
     <*> f objViewPos 0 "viewPos"
     <*> f objLightAmbient 0.1 "light.ambient"
     <*> f objLightDiffuse 1 "light.diffuse"
-    <*> f objLightSpecular (V3 0 1 0) "light.specular"
+    <*> f objLightSpecular 1 "light.specular"
     <*> f objLightPosition lightPos "light.position"
-    <*> f objDiffuseMap 0 "light.position"
-    <*> f objSpecularMap 0 "light.position"
-    <*> f objShininess 0 "light.position"
+    <*> f objDiffuseMap 0 "material.diffuse"
+    <*> f objSpecularMap 0 "material.specular"
+    <*> f objShininess 32 "material.shininess"
 
 cameraSpeed :: Float
-cameraSpeed = 2.5
+cameraSpeed = 10
 
 main :: IO ()
 main = withWindow defaultHints $ do
-  -- hideCursor
-  (menv, log) <- runWriterT $ runExceptT buildEnvironment
-  liftIO $ putStrLn log
+  hideCursor
+  menv <- runExceptT buildEnvironment
   case menv of
-    Left err -> liftIO . putStrLn . ppProgramError $ err
+    Left err -> liftIO . putStrLn $ err
     Right env -> do
       p <- getCursorPos
       loop env (AppState 0 0 0 p)
       pure ()
   where
-    buildEnvironment :: ExceptT ProgramError (WriterT String (WindowT IO)) AppEnv
+    buildEnvironment :: ExceptT String (WindowT IO) AppEnv
     buildEnvironment = do
       --
       glEnable GL_DEPTH_TEST
       --
-      (cubeProg, log) <- createProgram "glsl/common.vert" "glsl/object.frag" objInit
-      forM_ log $ liftIO . putStrLn . ppProgramLog
-      meshes <-
-        liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
-          >>= either (throwError . ProgramLinkError) pure
-          >>= traverse setupMesh . toMesh
-      --
+      program <- withExceptT ppProgramError $ do
+        (program, log) <- createProgram "glsl/common.vert" "glsl/object.frag" objInit
+        forM_ log $ liftIO . putStrLn . ppProgramLog
+        pure program
+      -- meshes <-
+      --   liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
+      --     >>= either throwError pure
+      --     >>= traverse setupMesh . toMesh
+      meshes <- pure <$> setupMesh cube
+      withExceptT ppTextureError $ do
+        glActiveTexture GL_TEXTURE0
+        loadTextureRGB2D "assets/container_diffuse.png" False False
+        glActiveTexture GL_TEXTURE1
+        loadTextureRGB2D "assets/container_specular.png" False False
       pure AppEnv {..}
     loop AppEnv {..} sInit =
       flip runStateT sInit $ do
@@ -140,7 +157,7 @@ main = withWindow defaultHints $ do
           x <- use pos
           let view = lookAt x (x + front) up
           --
-          runProgramT cubeProg $ do
+          runProgramT program $ do
             setUniform objViewPos x
             setUniform objView view
             setUniform objModel identity
