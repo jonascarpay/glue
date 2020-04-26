@@ -22,7 +22,7 @@ loadMat :: FilePath -> IO (Either String [Material])
 loadMat path = parseOnly parseMtl <$> T.readFile path
 
 toMesh :: ObjFile -> [Mesh (V3 Float, V3 Float, V2 Float)]
-toMesh (ObjFile _ objs) = mkMesh . mkVertices . objFaces <$> objs
+toMesh (ObjFile _ objs) = fromVertexList . mkVertices . objFaces <$> objs
   where
     posMap = M.fromList $ zip [1 ..] (objs >>= objVertices)
     nmlMap = M.fromList $ zip [1 ..] (objs >>= objNormals)

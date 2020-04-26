@@ -9,7 +9,7 @@ module Mesh
     GPUMesh (..),
     drawMesh,
     triangle,
-    mkMesh,
+    fromVertexList,
     toVertexList,
   )
 where
@@ -37,8 +37,8 @@ data Mesh v
       }
   deriving (Eq, Show)
 
-mkMesh :: forall v. (Storable v, Ord v) => [v] -> Mesh v
-mkMesh vs = Mesh (VS.fromList $ reverse stack) (VS.fromList $ (imap M.!) <$> vs)
+fromVertexList :: forall v. (Storable v, Ord v) => [v] -> Mesh v
+fromVertexList vs = Mesh (VS.fromList $ reverse stack) (VS.fromList $ (imap M.!) <$> vs)
   where
     (imap, _, stack) :: (M.Map v Word32, Word32, [v]) =
       let f (!imap, !n, !stack) v
@@ -49,7 +49,7 @@ mkMesh vs = Mesh (VS.fromList $ reverse stack) (VS.fromList $ (imap M.!) <$> vs)
 toVertexList :: VS.Storable v => Mesh v -> [v]
 toVertexList (Mesh vs is) = map (vs VS.!) . fmap fromIntegral . VS.toList $ is
 
-setupMesh :: forall m v. (Show v, GLVertex v, MonadWindow m) => Mesh v -> m (GPUMesh v)
+setupMesh :: forall m v. (GLVertex v, MonadWindow m) => Mesh v -> m (GPUMesh v)
 setupMesh (Mesh v i) = do
   vao <- genArray
   Buffer vbo <- genBuffer

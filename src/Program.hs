@@ -1,6 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -23,16 +21,18 @@ where
 
 import Control.Monad.Except
 import Control.Monad.Reader
+import Control.Monad.State
 import Data.Functor (($>))
 import Data.Functor.Identity
 import Data.Proxy
+import qualified Data.Set as S
 import qualified Foreign as F
 import qualified Foreign.C.String as F
 import Graphics.GL.Core33
 import Graphics.GL.Types
 import Uniform
 
-data Program (m :: (* -> *) -> *) v
+data Program m v
   = Program
       { programId :: !GLuint,
         _setUnis :: !(m Setter),
@@ -64,7 +64,7 @@ data ProgramError
   deriving (Eq, Show)
 
 ppProgramError :: ProgramError -> String
-ppProgramError (UniformNotFound name) = "Uniform variable \"" <> name <> "\" not found (possibly optimized away)"
+ppProgramError (UniformNotFound name) = "Uniform variable " <> show name <> " not found (possibly optimized away)"
 ppProgramError ShaderObjectError = "Unable to create shader object"
 ppProgramError ProgramObjectError = "Unable to create program object"
 ppProgramError (ShaderCompilationError path log) = "Error while compiling " <> path <> ":\n" <> log
@@ -73,12 +73,17 @@ ppProgramError (ProgramLinkError log) = "Error while linking program:\n" <> log
 data ProgramLog
   = LinkLog String
   | CompileLog FilePath String
+  | UniformDuplicates [String]
   deriving (Eq, Show)
 
 ppProgramLog :: ProgramLog -> String
 ppProgramLog (LinkLog log) = "Warning while linking:\n" <> log
 ppProgramLog (CompileLog path log) = "Warning while compiling " <> path <> ":\n" <> log
+ppProgramLog (UniformDuplicates [name]) = "Duplicate uniform variable: " <> show name
+ppProgramLog (UniformDuplicates names) = "Duplicate uniform variables:\n" <> unlines (show <$> names)
 
+-- | Loads and compiles shaders.
+--   Links the material to its corresponding OpenGL uniforms
 createProgram ::
   forall m mat vert.
   MonadIO m =>
@@ -89,19 +94,27 @@ createProgram ::
 createProgram vert frag act = do
   (program, log) <- createShaderProgram vert frag
   glUseProgram program
-  sets <- setters program
-  pure (Program program sets (setter sets), log)
+  sets <- linkUniforms program
+  pure (Program program sets (mkMaterialSetter sets), log <> duplicateLogMsg)
   where
-    setters :: GLuint -> ExceptT ProgramError m (mat Setter)
-    setters program = act $ \_ a lbl ->
+    linkUniforms :: GLuint -> ExceptT ProgramError m (mat Setter)
+    linkUniforms program = act $ \_ a lbl ->
       getUniformLocation lbl program >>= \case
         Nothing -> throwError $ UniformNotFound lbl
         Just loc -> do
           setUniformRaw loc a
           pure $ Setter $ setUniformRaw loc
-    setter :: mat Setter -> Setter (mat Identity)
-    setter matSet = Setter $ \mat ->
+    mkMaterialSetter :: mat Setter -> Setter (mat Identity)
+    mkMaterialSetter matSet = Setter $ \mat ->
       void $ act $ \f _ _ -> runSetter (f matSet) (runIdentity $ f mat) $> Proxy
+    duplicates :: S.Set String
+    duplicates = snd $ flip execState (mempty, mempty) $ act $ \_ _ lbl -> state $ \(seen, dup) ->
+      ( Proxy,
+        if S.member lbl seen
+          then (seen, S.insert lbl dup)
+          else (S.insert lbl seen, dup)
+      )
+    duplicateLogMsg = [UniformDuplicates (S.toList duplicates) | not (S.null duplicates)]
 
 setUniform ::
   MonadIO m =>
@@ -137,9 +150,11 @@ createShaderProgram pathVert pathFrag = do
     bytes <- F.alloca $ \bytes ->
       glGetProgramiv programId GL_INFO_LOG_LENGTH bytes
         >> F.peek bytes
-    F.allocaBytes (fromIntegral bytes) $ \res -> do
-      glGetProgramInfoLog programId bytes F.nullPtr res
-      F.peekCString res
+    if bytes > 0
+      then F.allocaBytes (fromIntegral bytes) $ \res -> do
+        glGetProgramInfoLog programId bytes F.nullPtr res
+        F.peekCString res
+      else pure ""
   let log _ "" = []
       log f l = [f l]
       logs = log (CompileLog pathVert) vlog <> log (CompileLog pathFrag) flog <> log LinkLog linkLog
@@ -164,12 +179,13 @@ createShader filename shaderType = do
           glGetShaderiv shaderId GL_COMPILE_STATUS success
           (/= 0) <$> F.peek success
   compileLog <- liftIO $ do
-    bytes <- F.alloca $ \bytes ->
+    bytes <- F.alloca $ \bytes -> do
       glGetShaderiv shaderId GL_INFO_LOG_LENGTH bytes
         >> F.peek bytes
-    F.allocaBytes (fromIntegral bytes) $ \res ->
-      glGetShaderInfoLog shaderId bytes F.nullPtr res
-        >> F.peekCString res
+    if bytes > 0
+      then F.allocaBytes (fromIntegral bytes) $ \res ->
+        glGetShaderInfoLog shaderId bytes F.nullPtr res >> F.peekCString res
+      else pure ""
   if compileSuccess
     then pure (shaderId, compileLog)
     else throwError (ShaderCompilationError filename compileLog)

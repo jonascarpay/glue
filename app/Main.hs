@@ -14,6 +14,7 @@ import Control.Lens hiding (indices, transform)
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Writer
+import Data.Int (Int32)
 import Graphics.GL.Core33 as GL
 import Graphics.UI.GLFW as GLFW hiding (getCursorPos, getTime)
 import Linear
@@ -22,26 +23,6 @@ import NonGL
 import Obj
 import Program
 import Window
-
-data ObjectMat f
-  = ObjectMat
-      { objView :: f (M44 Float),
-        objModel :: f (M44 Float),
-        objProj :: f (M44 Float),
-        objViewPos :: f (V3 Float),
-        objLightAmbient :: f (V3 Float),
-        objLightDiffuse :: f (V3 Float),
-        objLightSpecular :: f (V3 Float),
-        objLightPosition :: f (V3 Float)
-      }
-
-type ObjVert = (V3 Float, V3 Float, V2 Float)
-
-data AppEnv
-  = AppEnv
-      { cubeProg :: Program ObjectMat ObjVert,
-        meshes :: [GPUMesh ObjVert]
-      }
 
 data AppState
   = AppState
@@ -53,11 +34,34 @@ data AppState
 
 makeLenses ''AppState
 
+type ObjVert = (V3 Float, V3 Float, V2 Float)
+
+data AppEnv
+  = AppEnv
+      { cubeProg :: Program ObjectMat ObjVert,
+        meshes :: [GPUMesh ObjVert]
+      }
+
 lightPos :: V3 Float
 lightPos = V3 5 3 0
 
 projectionM :: M44 Float
 projectionM = perspective (45 / 180 * pi) (640 / 480) 0.1 100
+
+data ObjectMat f
+  = ObjectMat
+      { objView :: f (M44 Float),
+        objModel :: f (M44 Float),
+        objProj :: f (M44 Float),
+        objViewPos :: f (V3 Float),
+        objLightAmbient :: f (V3 Float),
+        objLightDiffuse :: f (V3 Float),
+        objLightSpecular :: f (V3 Float),
+        objLightPosition :: f (V3 Float),
+        objDiffuseMap :: f Int32,
+        objSpecularMap :: f Int32,
+        objShininess :: f Float
+      }
 
 objInit :: MaterialInitializer ObjectMat
 objInit f =
@@ -70,6 +74,9 @@ objInit f =
     <*> f objLightDiffuse 1 "light.diffuse"
     <*> f objLightSpecular (V3 0 1 0) "light.specular"
     <*> f objLightPosition lightPos "light.position"
+    <*> f objDiffuseMap 0 "light.position"
+    <*> f objSpecularMap 0 "light.position"
+    <*> f objShininess 0 "light.position"
 
 cameraSpeed :: Float
 cameraSpeed = 2.5
@@ -92,7 +99,7 @@ main = withWindow defaultHints $ do
       glEnable GL_DEPTH_TEST
       --
       (cubeProg, log) <- createProgram "glsl/common.vert" "glsl/object.frag" objInit
-      forM_ log $ liftIO . print . ppProgramLog
+      forM_ log $ liftIO . putStrLn . ppProgramLog
       meshes <-
         liftIO (loadObj "/home/jmc/Downloads/nanosuit/nanosuit.obj")
           >>= either (throwError . ProgramLinkError) pure

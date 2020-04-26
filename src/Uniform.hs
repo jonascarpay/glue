@@ -21,8 +21,9 @@ instance Uniform (M44 Float) where
 instance Uniform (V3 Float) where
   setUniformRaw uid (V3 a b c) = glUniform3f uid a b c
 
-instance Uniform Float where
-  setUniformRaw = glUniform1f
+instance Uniform Float where setUniformRaw = glUniform1f
+
+instance Uniform Int32 where setUniformRaw = glUniform1i
 
 -- instance Uniform TextureUnit where
 --   setUniformRaw uid (TextureUnit slot) = glUniform1i uid slot

@@ -4,11 +4,11 @@ in vec3 Normal;
 in vec3 FragPos;
 in vec2 TexCoords;
 
-/* struct Material { */
-/* 	sampler2D diffuse; */
-/* 	sampler2D specular; */
-/* 	float shininess; */
-/* }; */
+struct Material {
+	sampler2D diffuse;
+	sampler2D specular;
+	float shininess;
+};
 
 struct Light {
 	vec3 position;
