@@ -63,17 +63,6 @@ data ObjectMat f
         objShininess :: f Float
       }
 
-cube :: Mesh ObjVert
-cube = fromVertexList $ do
-  V3 i j k <- [identity, - identity]
-  rot <- [V3 i j k, V3 k i j, V3 j k i]
-  let [a, b, c, d] = do
-        x <- [0, 1]
-        y <- [0, 1]
-        let v = V3 (2 * x -1) (2 * y -1) 1
-        pure (rot !* v, rot !* unit _z, V2 x y)
-   in [a, b, c, b, c, d]
-
 objInit :: MaterialInitializer ObjectMat
 objInit f =
   ObjectMat
@@ -81,12 +70,12 @@ objInit f =
     <*> f objModel identity "model"
     <*> f objProj projectionM "projection"
     <*> f objViewPos 0 "viewPos"
-    <*> f objLightAmbient 0.1 "light.ambient"
+    <*> f objLightAmbient 0.2 "light.ambient"
     <*> f objLightDiffuse 1 "light.diffuse"
     <*> f objLightSpecular 1 "light.specular"
     <*> f objLightPosition lightPos "light.position"
     <*> f objDiffuseMap 0 "material.diffuse"
-    <*> f objSpecularMap 0 "material.specular"
+    <*> f objSpecularMap 1 "material.specular"
     <*> f objShininess 32 "material.shininess"
 
 cameraSpeed :: Float

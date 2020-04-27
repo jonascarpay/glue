@@ -9,6 +9,7 @@ module Mesh
     GPUMesh (..),
     drawMesh,
     triangle,
+    cube,
     fromVertexList,
     toVertexList,
   )
@@ -56,6 +57,7 @@ setupMesh (Mesh v i) = do
   Buffer ebo <- genBuffer
   bindArray vao
   glBindBuffer GL_ARRAY_BUFFER vbo
+  -- TODO: Check for GL_OUT_OF_MEMORY
   liftIO $ VS.unsafeWith v $ \ptr ->
     let bytes = VS.length v * sizeOf (undefined :: v)
      in glBufferData GL_ARRAY_BUFFER (fromIntegral bytes) (castPtr ptr) GL_STATIC_DRAW
@@ -72,6 +74,17 @@ triangle =
   Mesh
     (VS.fromList [V3 (-0.5) (-0.5) 0, V3 0.5 (-0.5) 0, V3 0 0.5 0])
     (VS.fromList [0, 1, 2])
+
+cube :: Mesh (V3 Float, V3 Float, V2 Float)
+cube = fromVertexList $ do
+  V3 i j k <- [identity, - identity]
+  rot <- [V3 i j k, V3 k i j, V3 j k i]
+  let [a, b, c, d] = do
+        x <- [0, 1]
+        y <- [0, 1]
+        let v = V3 (2 * x -1) (2 * y -1) 1
+        pure (rot !* v, rot !* unit _z, V2 x y)
+   in [a, b, c, b, c, d]
 
 data GPUMesh v
   = GPUMesh
